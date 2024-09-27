@@ -29,7 +29,6 @@ use "nvim-lua/plenary.nvim"
 ## Modules
 
 - [plenary.async](#plenaryasync)
-- [plenary.async_lib](#plenaryasync_lib)
 - [plenary.job](#plenaryjob)
 - [plenary.path](#plenarypath)
 - [plenary.scandir](#plenaryscandir)
@@ -37,6 +36,10 @@ use "nvim-lua/plenary.nvim"
 - [plenary.test_harness](#plenarytest_harness)
 - [plenary.filetype](#plenaryfiletype)
 - [plenary.strings](#plenarystrings)
+- [plenary.profile](#plenaryprofile) (WIP)
+- [plenary.popup](#plenarypopup) (WIP)
+- [plenary.window](#plenarywindow) (WIP)
+- [plenary.collections](#plenarycollections) (WIP)
 
 ### plenary.async
 

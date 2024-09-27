@@ -30,6 +30,7 @@ popup._borders = {}
 popup._callback_fn = {}
 
 -- Result is passed to the callback. Indexed by win_id. See popup_win_closed.
+-- Only active popups are in table; used to check if a win_id is an active popup.
 popup._result = {}
 
 local function dict_default(options, key, default)
@@ -120,7 +121,7 @@ end
 ---
 ---@param winnr integer window id of popup window
 ---@param bufnrs table|nil optional list of ignored buffers
-local function close_window(winnr, bufnrs)
+local function close_window_for_aucmd(winnr, bufnrs)
   vim.schedule(function()
     -- exit if we are in one of ignored buffers
     if bufnrs and vim.list_contains(bufnrs, vim.api.nvim_get_current_buf()) then
@@ -149,7 +150,7 @@ local function close_window_autocmd(events, winnr, bufnrs)
   vim.api.nvim_create_autocmd("BufEnter", {
     group = augroup,
     callback = function()
-      close_window(winnr, bufnrs)
+      close_window_for_aucmd(winnr, bufnrs)
     end,
   })
 
@@ -158,7 +159,7 @@ local function close_window_autocmd(events, winnr, bufnrs)
       group = augroup,
       buffer = bufnrs[2],
       callback = function()
-        close_window(winnr)
+        close_window_for_aucmd(winnr)
       end,
     })
   end
@@ -188,8 +189,8 @@ function popup.create(what, vim_options)
     bufnr = vim.api.nvim_create_buf(false, true)
     assert(bufnr, "Failed to create buffer")
 
-    vim.api.nvim_buf_set_option(bufnr, "bufhidden", "wipe")
-    vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
+    vim.api.nvim_set_option_value("bufhidden", "wipe", {buf = bufnr})
+    vim.api.nvim_set_option_value("modifiable", true, {buf = bufnr})
 
     -- TODO: Handle list of lines
     if type(what) == "string" then
@@ -300,12 +301,11 @@ function popup.create(what, vim_options)
   -- vim popups are not focusable windows
   win_opts.focusable = if_nil(vim_options.focusable, false)
 
-  local win_id
   if vim_options.hidden then
-    assert(false, "hidden: not implemented yet and don't know how")
-  else
-    win_id = vim.api.nvim_open_win(bufnr, false, win_opts)
+    win_opts.hide = vim_options.hidden
   end
+
+  local win_id = vim.api.nvim_open_win(bufnr, false, win_opts)
 
   -- Set the default result. Also serves to indicate active popups.
   popup._result[win_id] = -1
@@ -326,6 +326,8 @@ function popup.create(what, vim_options)
   if vim_options.moved then
     if vim_options.moved == "any" then
       close_window_autocmd({ "CursorMoved", "CursorMovedI" }, win_id, { bufnr, vim.fn.bufnr() })
+      -- TODO:  Calculate and set a boundary; if the cursor moves outside that
+      --	boundary then close. This should handle all the cases.
       --[[
       else
         --   TODO: Handle word, WORD, expr, and the range functions... which seem hard?
@@ -350,8 +352,10 @@ function popup.create(what, vim_options)
     timer:start(
       vim_options.time,
       0,
+      -- TODO: investigate the wrap
       vim.schedule_wrap(function()
-        Window.try_close(win_id, false)
+        --Window.try_close(win_id, false)
+	popup.close(win_id)
       end)
     )
   end
@@ -505,14 +509,74 @@ function popup.create(what, vim_options)
     vim_options.finalize_callback(win_id, bufnr)
   end
 
-  -- TODO: Perhaps there's a way to return an object that looks like a window id,
-  --    but actually has some extra metadata about it.
-  --
-  --    This would make `hidden` a lot easier to manage
-  return win_id, {
-    win_id = win_id,
-    border = border,
-  }
+  -- TODO: not sure what this border stuff is about, maybe from before hidden;
+  --			 note there's "popup._borders[win_id] = border"
+  -- -- TODO: Perhaps there's a way to return an object that looks like a window id,
+  -- --    but actually has some extra metadata about it.
+  -- --
+  -- --    This would make `hidden` a lot easier to manage
+  -- return win_id, {
+  --   win_id = win_id,
+  --   border = border,
+  -- }
+
+	return win_id
+end
+
+--- Close the specified popup window; the "result" is available through callback.
+--- Do nothing if there is no such popup with the specified id.
+---
+---@param win_id integer window id of popup window
+---@param result any? value to return in a callback
+function popup.close(win_id, result)
+  -- Only save the result if there is a popup with that window id.
+  if popup._result[win_id] == nil then
+    return
+  end
+  -- update the result as specified
+  if result == nil then
+    result = 0
+  end
+
+  popup._result[win_id] = result
+  Window.try_close(win_id, true)
+end
+
+--- Return list of window id of existing popups
+---
+---@return integer[]
+function popup.list()
+  local ids = {}
+  for k, _ in pairs(popup._result) do
+    if type(k) == 'number' then
+      ids[#ids+1] = k
+    end
+  end
+  return ids
+end
+
+--- Hide the popup.
+--- If win_id does not exist nothing happens.  If win_id
+--- exists but is not a popup window an error is given.
+---
+---@param win_id integer window id of popup window
+function popup.hide(win_id)
+  if not vim.api.nvim_win_is_valid(win_id) then
+    return
+  end
+  assert(popup._result[win_id] ~= nil, "popup.hide: not a popup window")
+  vim.api.nvim_win_set_config(win_id, { hide = true })
+end
+
+--- Show the popup.
+--- Do nothing if non-existent window or window not a popup.
+---
+---@param win_id integer show the popup with this win_id
+function popup.show(win_id)
+  if not vim.api.nvim_win_is_valid(win_id) or not popup._result[win_id] then
+    return
+  end
+  vim.api.nvim_win_set_config(win_id, { hide = false })
 end
 
 -- Move popup with window id {win_id} to the position specified with {vim_options}.

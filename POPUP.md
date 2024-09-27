@@ -44,9 +44,15 @@ Unlikely (due to not sure if people are using):
 Suported Functions:
 
 - [x] popup.create
+- [x] popup.hide
+- [x] popup.show
 - [x] popup.move
-- [ ] popup.close
+- [x] popup.close
 - [ ] popup.clear
+- [ ] popup.getoptions
+- [ ] popup.getpos
+- [ ] popup.locate
+- [x] popup.list
 
 
 Suported Features:
@@ -77,6 +83,7 @@ Suported Features:
     - [x] title
     - [x] wrap
     - [x] zindex
+    - [x] hidden
     - [x] callback
     - [ ] mousemoved
         - [ ] "any"
@@ -100,7 +107,6 @@ Additional Features:
 ## All known unimplemented vim features at the moment
 
 - firstline
-- hidden
 - ~ pos
 - fixed
 - filter
