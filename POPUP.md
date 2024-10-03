@@ -16,8 +16,16 @@ this and expose the API in vimL to create better compatibility.
 
 ## List of Neovim Features Required:
 
+- [ ] Mouse Work
+    mouse event for buffer in non-focusable window #30504
+    https://github.com/neovim/neovim/issues/30504
 - [ ] Key handlers (used for `popup_filter`)
+    vim.on_key() can consume the key and prevent mapping #30741
+    https://github.com/neovim/neovim/issues/30741
+    - [ ] filter
+    - [ ] mapping
 - [ ] scrollbar for floating windows
+    - [ ] firstline
     - [ ] scrollbar
     - [ ] scrollbarhighlight
     - [ ] thumbhighlight
@@ -25,95 +33,109 @@ this and expose the API in vimL to create better compatibility.
 Optional:
 
 - [ ] Add forced transparency to a floating window.
-    - Apparently overrides text?
-    - This is for the `mask` feature flag
-
+    - [ ] mask
+        - Apparently overrides text?
 
 Unlikely (due to technical difficulties):
 
 - [ ] Add `textprop` wrappers?
-    - textprop
-    - textpropwin
-    - textpropid
+    - [ ] textprop
+    - [ ] textpropwin
+    - [ ] textpropid
 
 Unlikely (due to not sure if people are using):
 - [ ] tabpage
 
 ## Progress
 
-Suported Functions:
+### Suported Functions
 
+Creating a popup window:
 - [x] popup.create
+
+Manipulating a popup window:
 - [x] popup.hide
 - [x] popup.show
 - [x] popup.move
+
+Closing popup windows:
 - [x] popup.close
-- [ ] popup.clear
+- [x] popup.clear
+
+Filter functions:
+
+Other:
 - [ ] popup.getoptions
-- [ ] popup.getpos
+- [x] popup.getpos
 - [ ] popup.locate
 - [x] popup.list
 
 
-Suported Features:
+### Suported Features
 
 - [x] what
     - string
     - list of strings
     - bufnr
 - [x] popup_create-arguments
-    - [x] border
-    - [x] borderchars
-    - [x] col
-    - [x] cursorline
-    - [x] highlight
     - [x] line
+    - [x] col
+    - [x] pos
+    - [x] posinvert
+    - [ ] fixed
     - [x] {max,min}{height,width}
+    - [x] hidden
+    - [x] title
+    - [x] wrap
+    - [ ] drag
+    - [ ] dragall
+    - [?] close
+        - [ ] "button"
+        - [x] "click"
+        - [x] "none"
+    - [x] highlight
+    - [x] padding
+    - [x] border
+    - [ ] borderhighlight
+    - [x] borderchars
+    - [x] zindex
+    - [x] time
     - [?] moved
         - [x] "any"
         - [ ] "word"
         - [ ] "WORD"
         - [ ] "expr"
         - [ ] (list options)
-    - [x] padding
-    - [?] pos
-        - Somewhat implemented. Doesn't work with borders though.
-    - [x] posinvert
-    - [x] time
-    - [x] title
-    - [x] wrap
-    - [x] zindex
-    - [x] hidden
-    - [x] callback
     - [ ] mousemoved
         - [ ] "any"
         - [ ] "word"
         - [ ] "WORD"
         - [ ] "expr"
         - [ ] (list options)
-    - [?] close
-        - [ ] "button"
-        - [ ] "click"
-        - [x] "none"
+    - [x] cursorline
+    - [x] filter
+    - [x] mapping
+    - [x] filtermode
+    - [x] callback
 
 
-Additional Features:
+### Additional Features from `neovim`
 
 - [x] enter
 - [x] focusable
 - [x] noautocmd
 - [x] finalize_callback
+- [x] title_pos
+- [x] footer
+- [x] footer_pos
 
 ## All known unimplemented vim features at the moment
 
-- firstline
-- ~ pos
 - fixed
-- filter
-- filtermode
-- mapping
-- mouse:
-    - drag
-    - resize
+- flip (not implemented in vim yet)
+- scrollbar related: firstline, scrollbar, scrollbarhighlight, thumbhighlight
+- resize
 
-- (not implemented in vim yet) flip
+## Functions not planned
+
+- popup_beval

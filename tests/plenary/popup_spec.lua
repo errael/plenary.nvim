@@ -20,6 +20,9 @@ describe("plenary.popup", function()
 
     local win_config = vim.api.nvim_win_get_config(win_id)
     eq(20, win_config.width)
+    local border = win_config.border
+    border = border == nil and "none" or border
+    assert(border == "none", "Should not have a border")
   end)
 
   it("can create a very simple window after 'set nomodifiable'", function()
@@ -52,27 +55,29 @@ describe("plenary.popup", function()
 
     eq(true, vim.api.nvim_win_is_valid(win_id))
 
-    local border_id = config.border.win_id
-    assert(border_id, "Has a border win id")
-    eq(true, vim.api.nvim_win_is_valid(border_id))
+    local border = vim.api.nvim_win_get_config(win_id).border
+    border = border == nil and "none" or border
+    assert(border ~= "none", "Has a border")
   end)
 
-  it("can apply a border highlight", function()
-    local _, opts = popup.create("hello there", {
-      border = true,
-      borderhighlight = "PopupColor2",
-    })
+  -- TODO: borderhighlight
+  -- it("can apply a border highlight", function()
+  --   local _, opts = popup.create("hello there", {
+  --     border = true,
+  --     borderhighlight = "PopupColor2",
+  --   })
 
-    local border_win_id = opts.border.win_id
-    eq("Normal:PopupColor2", vim.api.nvim_win_get_option(border_win_id, "winhl"))
-  end)
+  --   local border_win_id = opts.border.win_id
+  --   eq("Normal:PopupColor2", vim.api.nvim_win_get_option(border_win_id, "winhl"))
+  -- end)
 
-  it("can ignore border highlight with no border", function()
-    local _ = popup.create("hello there", {
-      border = false,
-      borderhighlight = "PopupColor3",
-    })
-  end)
+  -- TODO: borderhighlight
+  -- it("can ignore border highlight with no border", function()
+  --   local _ = popup.create("hello there", {
+  --     border = false,
+  --     borderhighlight = "PopupColor3",
+  --   })
+  -- end)
 
   it("can do basic padding", function()
     local win_id = popup.create("12345", {
@@ -96,37 +101,45 @@ describe("plenary.popup", function()
     local bufnr = vim.api.nvim_win_get_buf(win_id)
     eq({ "", " hello border ", "" }, vim.api.nvim_buf_get_lines(bufnr, 0, -1, false))
 
-    local border_id = config.border.win_id
-    assert(border_id, "Has a border win id")
-    eq(true, vim.api.nvim_win_is_valid(border_id))
+    local border = vim.api.nvim_win_get_config(win_id).border
+    border = border == nil and "none" or border
+    assert(border ~= "none", "Has a border")
   end)
 
   describe("borderchars", function()
     local test_border = function(name, borderchars, expected)
       it(name, function()
-        local _, config = popup.create("all the plus signs", {
+        local win_id, config = popup.create("all the plus signs", {
           line = 8,
           col = 55,
           padding = { 0, 3, 0, 3 },
+          border = {},
           borderchars = borderchars,
         })
 
-        local border_id = config.border.win_id
-        local border_bufnr = vim.api.nvim_win_get_buf(border_id)
-        eq(expected, vim.api.nvim_buf_get_lines(border_bufnr, 0, -1, false))
+        local border = vim.api.nvim_win_get_config(win_id).border
+        eq(expected, border)
       end)
     end
 
     test_border("can support multiple border patterns", { "+" }, {
-      "++++++++++++++++++++++++++",
-      "+                        +",
-      "++++++++++++++++++++++++++",
+      "+", "+", "+", "+", "+", "+", "+", "+"
     })
 
     test_border("can support multiple patterns inside the borderchars", { "-", "+" }, {
-      "+------------------------+",
-      "-                        -",
-      "+------------------------+",
+      "+", "-", "+", "-", "+", "-", "+","-",
+    })
+
+    test_border("can support 4 edges", {
+      "1", "2", "3", "4",
+    }, {
+      "╔", "1" ,"╗", "2", "╝", "3", "╚", "4"
+    })
+
+    test_border("can support 4 edges and 4 corners", {
+      "1", "2", "3", "4", "5", "6", "7", "8",
+    }, {
+      "5", "1" ,"6", "2", "7", "3", "8", "4"
     })
   end)
 
