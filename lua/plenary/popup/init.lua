@@ -46,6 +46,129 @@ local neovim_passthru = {
 --      POPUP-ITEM: ns_id? namespace for on_key callback
 popup._popups = {}
 
+-- ===========================================================================
+--
+-- popup mouse event handling
+--
+
+local mp_press  -- mousepos when press
+local drag_start_win_x
+local drag_start_win_y
+local is_drag = nil   -- nil no drag events; false not dragging a popup
+local win_id_press = nil
+
+local function mouse_cb(event)
+  local msg = ""
+  local function output_msg(msgx)
+    if not msgx then msgx = msg end
+    --vim.print(string.format("popup: mouse_cb: %s: '%s'", event, msgx))
+  end
+
+  local mp = vim.fn.getmousepos()
+  local pup
+
+  if event == "<LeftMouse>" then
+    win_id_press = mp.winid
+    pup = popup._popups[win_id_press]
+    mp_press = mp
+    is_drag = nil
+
+    output_msg(vim.inspect({mp.screencol, mp.screenrow}))
+    -- popup: mouse_cb: <LeftMouse>: '{ 30, 16 }'
+    local xx = popup.getpos(win_id_press)
+    output_msg(string.format("x,y (%d,%d) w,h (%d,%d)",xx.col, xx.line, xx.width, xx.height))
+    -- popup: mouse_cb: <LeftMouse>: 'x,y (20,10) w,h (11,7)'
+
+    return output_msg()
+  elseif win_id_press then
+    pup = popup._popups[win_id_press]
+  end
+
+  if not pup then
+    return
+  end
+
+  if event == "<LeftRelease>" then
+    -- If is_drag is nil then the mouse hasn't moved since the mouse press.
+    if is_drag == nil then
+      if pup.vim_options.close == "click" then
+        popup.close(pup.win_id, -2)
+      elseif pup.vim_options.close == "button" and pup.extras.button_close_pad ~= nil
+            and mp.winrow == 1
+            and mp.wincol == (vim.api.nvim_win_get_width(pup.win_id)
+                          + pup.extras.button_close_pad) then
+        popup.close(pup.win_id, -2)
+      end
+    end
+      -- vim.print(string.format("popup: button: %s: %d %d",
+      --     event, mp.wincol, vim.api.nvim_win_get_width(pup.win_id)))
+
+    -- cautious
+    is_drag = nil
+    win_id_press = nil
+    return output_msg()
+  end
+
+  -- (x,y) distance from "loc" to mouse pos; loc default to mp_press
+  ---@param loc? table as returned from mousepos, only screencol/screenrow used
+  local function delta(loc)
+    loc = loc or mp_press
+    if loc == nil then
+      return 123456, 123456
+    else
+      return mp.screencol - loc.screencol, mp.screenrow - loc.screenrow
+    end
+  end
+
+  -- is the mouse press on a border
+  local function on_border()
+    -- Need to check each edge separately
+    local win_pos = popup.getpos(win_id_press)
+    local on_edge = {} -- do in top/left/bot/right
+    on_edge[#on_edge+1] = mp_press.screenrow == win_pos.line
+    on_edge[#on_edge+1] = mp_press.screencol == win_pos.col + win_pos.width - 1
+    on_edge[#on_edge+1] = mp_press.screenrow == win_pos.line + win_pos.height - 1
+    on_edge[#on_edge+1] = mp_press.screencol == win_pos.col
+    local thickness = pup.extras.border_thickness
+    local drag_ok = false
+    for i = 1, 4 do
+      if on_edge[i] and thickness[i] ~= 0 then
+        drag_ok = true
+        break;
+      end
+    end
+    -- vim.print(string.format("drag_ok %s. edge %s, border %s",
+    --     drag_ok, vim.inspect(on_edge), vim.inspect(pup.extras.border_thickness)))
+    return drag_ok
+  end
+
+  -- note: win_id_press should be something
+  if event == "<LeftDrag>" then
+    if is_drag == nil then
+      -- first drag event since press
+      if pup.vim_options.dragall or pup.vim_options.drag and on_border() then
+        is_drag = true
+        drag_start_win_x,drag_start_win_y = popup._getxy(win_id_press)
+      else
+        is_drag = false
+      end
+    end
+    output_msg(string.format("is_drag %s", is_drag))
+    if is_drag == false then
+      return
+    end
+    local x,y = delta()
+    popup.move(win_id_press, {col = x + drag_start_win_x, line = y + drag_start_win_y})
+    msg = string.format("(%d,%d) (%d, %d) %d", x, y,
+                        x + drag_start_win_x, y + drag_start_win_y, mp.winid)
+    return output_msg()
+  end
+end
+
+-- ===========================================================================
+--
+-- popup filter handling
+--
 
 -- If a popup needs a filter, then the popup gets it's own namespace and on_key listener.
 -- Don't need a listener for a hidden popup.
@@ -129,8 +252,9 @@ local function setup_on_key_cb(win_id)
   if not hidden and vim_options.filter then
     pup.ns_id = pup.ns_id or vim.api.nvim_create_namespace("")
     local on_key_opts = {
-      enable_return_value_controls_discard = true,
+      may_discard = true,
     }
+    -- default mapping to true
     on_key_opts.allow_mapping = not (vim_options.mapping == false)
     vim.on_key(create_on_key_cb(pup, on_key_opts.allow_mapping), pup.ns_id, on_key_opts)
   elseif pup.ns_id then
@@ -145,6 +269,11 @@ local function dict_default(options, key, default)
     return options[key]
   end
 end
+
+-- ===========================================================================
+--
+-- popup close handling
+--
 
 --- Closes the popup window
 --- Adapted from vim.lsp.util.close_preview_autocmd
@@ -212,6 +341,11 @@ local function popup_win_closed(win_id)
   -- Forget about this window.
   popup._popups[win_id] = nil
 end
+
+-- ===========================================================================
+--
+-- popup positioning
+--
 
 -- Convert the positional {vim_options} to compatible neovim options and add them to {win_opts}
 -- If an option is not given in {vim_options}, fall back to {default_opts}
@@ -299,6 +433,11 @@ local function add_position_config(win_opts, vim_options, default_opts)
   -- ,     contents on the screen.  Set to TRUE to disable this.
 end
 
+-- ===========================================================================
+--
+-- popup border handling
+--
+
 --- Convert a vim border spec into a nvim border spec.
 --- If no borderchars, then border is directly passed to window configuration,
 --- so can use the full neovim border spec.
@@ -307,12 +446,13 @@ end
 --- @param vim_options { }
 --- @param win_opts { }
 --- @param extras { }
-local function translate_border(vim_options, win_opts, extras)
+local function translate_border(win_opts, vim_options, extras)
   if not vim_options.border or vim_options.border == "none" then
     extras.border_thickness = { 0, 0, 0, 0}
     return
   end
   if type(vim_options.border) == "string" then
+    -- TODO: convert to border chars instead of string, then "X" close can work.
     win_opts.border = vim_options.border  -- allow neovim border style name
     extras.border_thickness = { 1, 1, 1, 1}
     return
@@ -398,8 +538,14 @@ local function translate_border(vim_options, win_opts, extras)
   win_opts.border = win_border
 end
 
+-- ===========================================================================
+--
+-- popup API
+--
+
 function popup.create(what, vim_options)
   vim_options = vim.deepcopy(vim_options)
+  local win_opts = {}
   local extras = {}
 
   local bufnr
@@ -459,7 +605,6 @@ function popup.create(what, vim_options)
         table.insert(what, "")
       end
     end
-
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, true, what)
   end
   if not extras.padding then
@@ -482,7 +627,6 @@ function popup.create(what, vim_options)
     vim_options.height = #what
   end
 
-  local win_opts = {}
   win_opts.relative = "editor"
   win_opts.style = "minimal"
 
@@ -501,11 +645,34 @@ function popup.create(what, vim_options)
   -- vim popups are not focusable windows
   win_opts.focusable = if_nil(vim_options.focusable, false)
 
-  -- Add positional and sizing config to win_opts
+  -- add positional and sizing config to win_opts
   add_position_config(win_opts, vim_options, { width = 1, height = 1 })
 
-  -- Set up the border.
-  translate_border(vim_options, win_opts, extras)
+  -- -- Set up the border.
+  translate_border(win_opts, vim_options, extras)
+
+  -- set up for "close == button"
+  if vim_options.close == "button" then
+    -- TODO: at some point win_opts.border will have been converted to array
+    -- With neovim style borders can't just change a border.
+    if type(win_opts.border) ~= "string" then
+      if win_opts.border and win_opts.border[3] ~= "" then
+        -- There's a top-right border corner.
+        win_opts.border[3] = "X"
+        -- Need to add left+right border to column column size for checking.
+        extras.button_close_pad = extras.border_thickness[2] + extras.border_thickness[4]
+      elseif extras.border_thickness[1] == 0 and extras.border_thickness[2] == 0 then
+        -- There's no border on top or right, overlay the buffer.
+        vim.api.nvim_buf_set_extmark(bufnr, vim.api.nvim_create_namespace(""), 0, 0, {
+          virt_text = { { "X", "" } },
+          virt_text_pos = "right_align",
+        })
+        extras.button_close_pad = 0
+      end
+      -- NOTE: if extras.button_close_pad is nil, then "button" can't be handled.
+    end
+  end
+
 
   -- posinvert, When FALSE the value of "pos" is always used.  When
   -- ,   TRUE (the default) and the popup does not fit
@@ -540,21 +707,11 @@ function popup.create(what, vim_options)
   win_opts.zindex = utils.bounded(zindex, 1, 32000)
   vim_options.zindex = win_opts.zindex -- save this for sorting
 
-  -- TODO:  Set up "win_opts.mouse = popup_mouse_listener_function".
-  --        Probably need to save vim_options for the listener;
-  --        not to mention popup_setoptions/popup_getoptions.
-  if vim_options.close == "click" then
-    win_opts.mouse = true
-  end
+  -- Install a mouse handler.
+  -- TODO: could only install the handler if it's needed.
+  win_opts.mouse = mouse_cb
 
   local win_id = vim.api.nvim_open_win(bufnr, false, win_opts)
-
-  -- TODO: don't need this with mouse=function
-  -- REMOVE when possible.
-  if vim_options.close == "click" then
-    vim.keymap.set({"n", "i"}, "<LeftRelease>",
-        function() popup.close(win_id, -2) end, {buffer = bufnr})
-  end
 
   -- Set the default result. The table keys also indicate active popups.
   -- Also keep track of all the options; they may be used for other functions.
@@ -639,7 +796,6 @@ function popup.create(what, vim_options)
   -- flip: not implemented at the time of writing
   -- Mouse:
   --    mousemoved: no idea how to do the things with the mouse, so it's an exercise for the reader.
-  --    drag: mouses are hard
   --    resize: mouses are hard
   --    close: partially implemented
   --
@@ -850,6 +1006,13 @@ end
 --       neovim          ==  vim-core + padding
 --
 
+---@return integer x
+---@return integer y
+function popup._getxy(win_id)
+  local position = vim.api.nvim_win_get_position(win_id)
+  return position[2] + 1, position[1] + 1
+end
+
 --- The "core_*" fields are the original text boundaries without padding or border.
 --- The width/height fields include border and padding. nvim_win_get_config does
 --- not include border.
@@ -857,6 +1020,9 @@ end
 ---
 function popup.getpos(win_id)
   local pup = popup._popups[win_id]
+  if not pup then
+    return {}
+  end
   local extras = pup.extras
   --local win_opts = pup.win_opts
   local config = vim.api.nvim_win_get_config(win_id)

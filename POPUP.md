@@ -52,6 +52,7 @@ Unlikely (due to not sure if people are using):
 
 Creating a popup window:
 - [x] popup.create
+- [ ] a bunch of specialized popups; basically preset options
 
 Manipulating a popup window:
 - [x] popup.hide
@@ -87,10 +88,10 @@ Other:
     - [x] hidden
     - [x] title
     - [x] wrap
-    - [ ] drag
-    - [ ] dragall
-    - [?] close
-        - [ ] "button"
+    - [x] drag
+    - [x] dragall
+    - [x] close
+        - [x] "button"
         - [x] "click"
         - [x] "none"
     - [x] highlight
